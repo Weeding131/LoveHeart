@@ -369,8 +369,9 @@ body { margin: 0; }
   }
 
   /* ---- controls ---- */
-  var fontsReady = false;
+  var fontsReady = false, playing = false, paused = false, pauseAt = 0;
   function begin() {
+    playing = true;
     try {
       audio.currentTime = 0;
       var p = audio.play();
@@ -388,12 +389,33 @@ body { margin: 0; }
     soundBtn.setAttribute('aria-pressed', audio.muted ? 'true' : 'false');
     soundLabel.textContent = audio.muted ? 'تشغيل الصوت' : 'كتم الصوت';
     waves.style.opacity = audio.muted ? '0.25' : '1';
-    if (!audio.muted && started && audio.paused) { try { audio.play().catch(function () {}); } catch (err) {} }
+    if (!audio.muted && started && !paused && audio.paused) { try { audio.play().catch(function () {}); } catch (err) {} }
   });
 
   layout();
   if ('ResizeObserver' in window) new ResizeObserver(layout).observe(stage);
   else window.addEventListener('resize', layout);
+
+  /* ---- stop the song and the drawing when the page is left or hidden ---- */
+  function pauseAll() {
+    if (paused) return;
+    paused = true; pauseAt = performance.now();
+    try { audio.pause(); } catch (err) {}
+  }
+  function resumeAll() {
+    if (!paused) return;
+    paused = false; t0 += performance.now() - pauseAt;
+    if (playing && !audio.muted) { try { var p = audio.play(); if (p && p.catch) p.catch(function () {}); } catch (err) {} }
+  }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) pauseAll(); else resumeAll(); });
+  window.addEventListener('pagehide', pauseAll);
+  window.addEventListener('pageshow', function () { if (!document.hidden) resumeAll(); });
+  document.addEventListener('freeze', pauseAll);
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) resumeAll(); else pauseAll(); });
+    }, { threshold: 0.05 }).observe(stage);
+  }
 
   var fontsP = Promise.resolve();
   if (document.fonts && document.fonts.load) {
